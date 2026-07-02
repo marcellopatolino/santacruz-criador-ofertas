@@ -268,11 +268,11 @@ document.getElementById('loginCode').addEventListener('keydown', e => {
 //  LAYOUT SELECTION
 // ══════════════════════════════════════════════
 const layoutInfo = {
-  1: { name:'Produto Único',    products:1, w:800,  h:1000 },
-  2: { name:'Três Produtos',    products:3, w:1200, h:800  },
-  3: { name:'Combo 2 Produtos', products:2, w:1200, h:700  },
-  4: { name:'Seis Produtos',    products:6, w:1200, h:1000 },
-  5: { name:'Em Estoque',       products:1, w:800,  h:1000 },
+  1: { name:'Produto Único',    products:1, w:1080, h:1920 },
+  2: { name:'Três Produtos',    products:3, w:1080, h:1920 },
+  3: { name:'Combo 2 Produtos', products:2, w:1080, h:1920 },
+  4: { name:'Seis Produtos',    products:6, w:1080, h:1920 },
+  5: { name:'Em Estoque',       products:1, w:1080, h:1920 },
 };
 
 function selectLayout(n) {
@@ -393,13 +393,14 @@ async function startOCR() {
 }
 
 function cropProductArea(img) {
-  // Screenshot: product image lives in top ~40% of screen
+  // Crop bottom 50% of screenshot where PREÇO NF, DESC., CÓDIGO text lives
   const c = document.createElement('canvas');
-  c.width  = img.naturalWidth;
-  c.height = img.naturalHeight;
+  c.width = img.naturalWidth;
+  const cropY = Math.floor(img.naturalHeight * 0.50);
+  c.height = img.naturalHeight - cropY;
   const ctx = c.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  return c; // OCR full image; product image extracted separately in banner render
+  ctx.drawImage(img, 0, cropY, img.naturalWidth, c.height, 0, 0, img.naturalWidth, c.height);
+  return c;
 }
 
 function parseOCR(text) {
@@ -430,10 +431,6 @@ function buildEditFields() {
       ${title}
       <div class="ocr-row">
         <div class="ocr-field">
-          <label>OFERTA (nº)</label>
-          <input type="text" id="ed_oferta_${i}" value="${p.oferta||''}" placeholder="Ex: 123">
-        </div>
-        <div class="ocr-field">
           <label>CÓD. (CÓDIGO)</label>
           <input type="text" id="ed_cod_${i}" value="${p.codigo}" placeholder="Ex: 103404">
         </div>
@@ -451,11 +448,9 @@ function buildEditFields() {
 
 function collectEditData() {
   productData.forEach((p, i) => {
-    p.oferta = document.getElementById('ed_oferta_'+i)?.value.trim() || '';
     p.codigo = document.getElementById('ed_cod_'+i).value.trim();
     p.preco  = document.getElementById('ed_preco_'+i).value.trim();
     p.desc   = document.getElementById('ed_desc_'+i).value.trim();
-    p.nome   = '';
   });
 }
 
@@ -483,7 +478,7 @@ async function generateBanner() {
 }
 
 // ══════════════════════════════════════════════
-//  DRAWING HELPERS – template fiel aos layouts
+//  DRAWING HELPERS – novos templates 1080×1920
 // ══════════════════════════════════════════════
 const WHT='#FFFFFF';
 
@@ -496,6 +491,131 @@ function rr(ctx,x,y,w,h,tl,tr,br,bl){
   ctx.lineTo(x+bl,y+h); ctx.arcTo(x,y+h,x,y+h-bl,bl);
   ctx.lineTo(x,y+tl); ctx.arcTo(x,y,x+tl,y,tl);
   ctx.closePath();
+}
+
+// Crop top 8%–54% of screenshot = product photo
+function getProductImg(img){
+  if(!img) return null;
+  const tc=document.createElement('canvas');
+  const sy=Math.floor(img.naturalHeight*0.08);
+  const cropH=Math.floor(img.naturalHeight*0.46);
+  tc.width=img.naturalWidth; tc.height=cropH;
+  tc.getContext('2d').drawImage(img,0,sy,img.naturalWidth,cropH,0,0,img.naturalWidth,cropH);
+  return tc;
+}
+
+function bgWhite(ctx,w,h){ ctx.fillStyle=WHT; ctx.fillRect(0,0,w,h); }
+
+// Header: navy bar, red triangle left, logo top-right
+function drawHeader(ctx,w){
+  const H=130;
+  ctx.fillStyle=NAVY; ctx.fillRect(0,0,w,H);
+  ctx.fillStyle=RED;
+  ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(220,0); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
+  if(logoLoaded){
+    const lh=72, lw=logoImg.width*(lh/logoImg.height);
+    ctx.drawImage(logoImg,w-lw-28,(H-lh)/2,lw,lh);
+  }
+}
+
+// Footer: navy/red diagonal wave, logo bottom-left
+function drawFooter(ctx,w,h){
+  const fh=150, fy=h-fh;
+  ctx.fillStyle=NAVY;
+  ctx.beginPath(); ctx.moveTo(0,fy+40); ctx.lineTo(w*0.6,fy); ctx.lineTo(w,fy+30); ctx.lineTo(w,h); ctx.lineTo(0,h); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=RED;
+  ctx.beginPath(); ctx.moveTo(w*0.45,fy+20); ctx.lineTo(w,fy+10); ctx.lineTo(w,h); ctx.lineTo(w*0.45,h); ctx.closePath(); ctx.fill();
+  if(logoLoaded){
+    const lh=60, lw=logoImg.width*(lh/logoImg.height);
+    ctx.globalAlpha=0.92; ctx.drawImage(logoImg,28,h-lh-24,lw,lh); ctx.globalAlpha=1;
+  }
+}
+
+// Product image card with rounded corners
+function drawCard(ctx,img,x,y,w,h){
+  ctx.save();
+  rr(ctx,x,y,w,h,18); ctx.clip();
+  if(img){
+    const ir=img.naturalWidth/img.naturalHeight, cr=w/h;
+    let sw,sh,sx,sy;
+    if(ir>cr){ sh=img.naturalHeight; sw=sh*cr; sx=(img.naturalWidth-sw)/2; sy=0; }
+    else{ sw=img.naturalWidth; sh=sw/cr; sx=0; sy=(img.naturalHeight-sh)/2; }
+    ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+  } else {
+    ctx.fillStyle='#e8e8e8'; ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='#bbb'; ctx.font='bold 32px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('SEM FOTO',x+w/2,y+h/2);
+  }
+  ctx.restore();
+  rr(ctx,x,y,w,h,18); ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=2; ctx.stroke();
+}
+
+// Starburst: red star, white circle, DESC% inside
+function drawStarburst(ctx,cx,cy,outerR,innerR,spikes,desc){
+  const step=Math.PI/spikes;
+  ctx.beginPath();
+  for(let i=0;i<spikes*2;i++){
+    const r=i%2===0?outerR:innerR, a=i*step-Math.PI/2;
+    i===0?ctx.moveTo(cx+r*Math.cos(a),cy+r*Math.sin(a)):ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+  }
+  ctx.closePath(); ctx.fillStyle=RED; ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.7)'; ctx.lineWidth=3; ctx.stroke();
+  const ir=innerR*0.75;
+  ctx.beginPath(); ctx.arc(cx,cy,ir,0,Math.PI*2); ctx.fillStyle=WHT; ctx.fill();
+  ctx.strokeStyle=RED; ctx.lineWidth=3; ctx.stroke();
+  if(desc){
+    const dStr=desc.toString().replace('.',',');
+    ctx.fillStyle=RED; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.font=`bold ${Math.round(ir*0.28)}px Arial`; ctx.fillText('DESC',cx,cy-ir*0.38);
+    ctx.font=`bold ${Math.round(ir*0.42)}px Arial`; ctx.fillText(dStr+'%',cx,cy+ir*0.08);
+  }
+  ctx.textBaseline='alphabetic';
+}
+
+// Price pill: navy bg, red left tab "R$", white price
+function drawPricePill(ctx,x,y,w,h,preco){
+  const tabW=h*1.3;
+  rr(ctx,x,y,w,h,h/2); ctx.fillStyle=NAVY; ctx.fill();
+  rr(ctx,x,y,tabW,h,h/2,0,0,h/2); ctx.fillStyle=RED; ctx.fill();
+  ctx.fillStyle=WHT; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`bold ${Math.round(h*0.38)}px Arial`; ctx.fillText('R$',x+tabW/2,y+h/2);
+  const pStr=preco?parseFloat(preco).toFixed(2).replace('.',','):'0,00';
+  ctx.font=`bold ${Math.round(h*0.52)}px Arial`; ctx.fillText(pStr,x+tabW+(w-tabW)/2,y+h/2);
+  ctx.font=`${Math.round(h*0.22)}px Arial`; ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.fillText('PREÇO NF',x+tabW+(w-tabW)/2,y+h/2+h*0.3);
+  ctx.textBaseline='alphabetic';
+}
+
+// Code pill: white bg, navy left tab "CÓD:", navy code
+function drawCodePill(ctx,x,y,w,h,codigo){
+  const tabW=h*2.0;
+  rr(ctx,x,y,w,h,h/2); ctx.fillStyle=WHT; ctx.fill();
+  ctx.strokeStyle=NAVY; ctx.lineWidth=2; ctx.stroke();
+  rr(ctx,x,y,tabW,h,h/2,0,0,h/2); ctx.fillStyle=NAVY; ctx.fill();
+  ctx.fillStyle=WHT; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`bold ${Math.round(h*0.42)}px Arial`; ctx.fillText('CÓD:',x+tabW/2,y+h/2);
+  ctx.fillStyle=NAVY; ctx.font=`600 ${Math.round(h*0.46)}px Arial`;
+  ctx.fillText(codigo||'',x+tabW+(w-tabW)/2,y+h/2);
+  ctx.textBaseline='alphabetic';
+}
+
+// COMBO badge
+function drawComboTitle(ctx,cx,y,w){
+  const bw=400, bh=72, bx=cx-bw/2;
+  rr(ctx,bx,y-bh/2,bw,bh,bh/2); ctx.fillStyle=NAVY; ctx.fill();
+  ctx.fillStyle=RED;
+  ctx.beginPath(); ctx.moveTo(bx,y-bh/2); ctx.lineTo(bx+bh*0.9,y-bh/2); ctx.lineTo(bx,y+bh/2); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=WHT; ctx.font='bold 38px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('COMBO',cx,y+2); ctx.textBaseline='alphabetic';
+}
+
+// EM ESTOQUE badge
+function drawEmEstoque(ctx,cx,y){
+  const bw=700, bh=90, bx=cx-bw/2;
+  rr(ctx,bx,y,bw,bh,bh/2); ctx.fillStyle=NAVY; ctx.fill();
+  ctx.fillStyle=RED; rr(ctx,bx,y,bh*1.2,bh,bh/2,0,0,bh/2); ctx.fill();
+  ctx.fillStyle=WHT; ctx.font='bold 44px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('EM ESTOQUE',cx,y+bh/2+2); ctx.textBaseline='alphabetic';
 }
 
 // White background
@@ -720,120 +840,98 @@ function drawEmEstoque(ctx,cx,y){
 }
 
 // ══════════════════════════════════════════════
-//  LAYOUT 1 – Produto Único  800×1000
+//  RENDER LAYOUTS — 1080×1920 portrait
 // ══════════════════════════════════════════════
+// Layout 1 — Foto Única 1080×1920
 function renderLayout1(ctx,w,h){
-  bgWhite(ctx,w,h);
-  drawDots(ctx,w-120,100,100,600);
-  drawDots(ctx,0,100,100,600);
-  drawHeaderNew(ctx,w);
-
+  bgWhite(ctx,w,h); drawHeader(ctx,w);
   const p=productData[0];
-  // product card
-  drawCard(ctx,p.img, 82,110, 636,520);
-  // sun burst
-  drawSunBurst(ctx,162,190, 84,60,14, p.oferta||'');
-  // pills
-  drawPricePill(ctx,52,650, 696,72, p.preco);
-  drawTagPill(ctx,128,732, 544,50, p.desc);
-  drawCodPill(ctx,128,790, 544,50, p.codigo);
-  drawFooterWave(ctx,w,h);
+  const prodImg=getProductImg(p.img);
+  const cw=980, ch=880, cardX=(w-cw)/2, cardY=155;
+  drawCard(ctx,prodImg,cardX,cardY,cw,ch);
+  drawStarburst(ctx,cardX+130,cardY+ch-60,150,105,16,p.desc);
+  const pillW=920, pillH=110, pillX=(w-pillW)/2, pillY=cardY+ch+50;
+  drawPricePill(ctx,pillX,pillY,pillW,pillH,p.preco);
+  const codW=680, codH=76, codX=(w-codW)/2, codY=pillY+pillH+28;
+  drawCodePill(ctx,codX,codY,codW,codH,p.codigo);
+  drawFooter(ctx,w,h);
 }
 
-// ══════════════════════════════════════════════
-//  LAYOUT 2 – Três Produtos  1200×800
-// ══════════════════════════════════════════════
+// Layout 2 — Três Produtos 1080×1920
 function renderLayout2(ctx,w,h){
-  bgWhite(ctx,w,h);
-  drawHeaderNew(ctx,w);
-
-  const pad=28, gap=18;
-  const cw=(w-pad*2-gap*2)/3;
-  const cardH=340;
-
+  bgWhite(ctx,w,h); drawHeader(ctx,w);
+  const pad=24, gap=16, cols=3;
+  const cw=Math.floor((w-pad*2-gap*(cols-1))/cols), cardH=420;
   for(let i=0;i<3;i++){
-    const p=productData[i];
-    const x=pad+i*(cw+gap);
-    drawCard(ctx,p.img, x,88, cw,cardH);
-    drawSunBurst(ctx,x+72,158, 66,47,14, p.oferta||'');
-    drawPricePill(ctx,x,440, cw,58, p.preco);
-    drawTagPill(ctx,x+10,506, cw-20,42, p.desc);
-    drawCodPill(ctx,x+10,554, cw-20,42, p.codigo);
+    const p=productData[i]||{img:null,desc:'',preco:'',codigo:''};
+    const prodImg=getProductImg(p.img);
+    const x=pad+i*(cw+gap), y=160;
+    drawStarburst(ctx,x+cw/2,y+70,80,56,14,p.desc);
+    drawCard(ctx,prodImg,x,y+100,cw,cardH);
+    const py=y+100+cardH+18;
+    drawPricePill(ctx,x,py,cw,72,p.preco);
+    drawCodePill(ctx,x+4,py+72+14,cw-8,54,p.codigo);
   }
-  drawFooterWave(ctx,w,h);
+  drawFooter(ctx,w,h);
 }
 
-// ══════════════════════════════════════════════
-//  LAYOUT 3 – Combo 2 Produtos  1200×700
-// ══════════════════════════════════════════════
+// Layout 3 — Combo 2 Produtos 1080×1920
 function renderLayout3(ctx,w,h){
-  bgWhite(ctx,w,h);
-  drawHeaderNew(ctx,w);
-  drawComboBadge(ctx,w/2,82);
-
-  const pad=32, gap=22;
-  const cw=(w-pad*2-gap)/2;
-  const cardH=300;
-
+  bgWhite(ctx,w,h); drawHeader(ctx,w);
+  drawComboTitle(ctx,w/2,190,w);
+  const pad=28, gap=20, cw=Math.floor((w-pad*2-gap)/2), cardH=560;
   for(let i=0;i<2;i++){
-    const p=productData[i];
-    const x=pad+i*(cw+gap);
-    drawCard(ctx,p.img, x,148, cw,cardH);
-    drawSunBurst(ctx,x+68,218, 62,44,14, p.oferta||'');
-    drawPricePill(ctx,x,458, cw,58, p.preco);
+    const p=productData[i]||{img:null,desc:'',preco:'',codigo:''};
+    const prodImg=getProductImg(p.img);
+    const x=pad+i*(cw+gap), y=270;
+    drawStarburst(ctx,x+cw/2,y+75,88,62,14,p.desc);
+    drawCard(ctx,prodImg,x,y+110,cw,cardH);
+    const py=y+110+cardH+20;
+    drawPricePill(ctx,x,py,cw,82,p.preco);
+    drawCodePill(ctx,x,py+82+14,cw,60,p.codigo);
   }
-  // plus between
-  drawPlus(ctx,w/2,298, 30);
-  // shared desc + cod (centered under both)
-  const pW=480;
-  drawTagPill(ctx,(w-pW)/2,524, pW,46, productData[0].desc);
-  drawCodPill(ctx,(w-pW)/2,577, pW,46, productData[0].codigo);
-
-  drawFooterWave(ctx,w,h);
+  const plusY=270+110+cardH/2;
+  ctx.save();
+  ctx.beginPath(); ctx.arc(w/2,plusY,38,0,Math.PI*2);
+  ctx.fillStyle=NAVY; ctx.fill();
+  ctx.fillStyle=WHT; ctx.font='bold 46px Arial'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('+',w/2,plusY+2); ctx.restore();
+  drawFooter(ctx,w,h);
 }
 
-// ══════════════════════════════════════════════
-//  LAYOUT 4 – Seis Produtos  1200×1000
-// ══════════════════════════════════════════════
+// Layout 4 — Seis Produtos 2×3 1080×1920
 function renderLayout4(ctx,w,h){
-  bgWhite(ctx,w,h);
-  drawHeaderNew(ctx,w);
-
-  const cols=3,rows=2,pad=24,gap=14;
-  const cw=(w-pad*2-gap*(cols-1))/cols;
-  const ch=(h-72-120-pad*2-gap*(rows-1))/rows;
-  const cardH=ch-130;
-
+  bgWhite(ctx,w,h); drawHeader(ctx,w);
+  const cols=2, rows=3, pad=22, gap=16;
+  const cw=Math.floor((w-pad*2-gap)/cols);
+  const totalInner=h-130-150-pad*2-gap*(rows-1);
+  const cellH=Math.floor(totalInner/rows);
+  const cardH=Math.floor(cellH*0.52);
   for(let i=0;i<6;i++){
+    const p=productData[i]||{img:null,desc:'',preco:'',codigo:''};
+    const prodImg=getProductImg(p.img);
     const col=i%cols, row=Math.floor(i/cols);
-    const p=productData[i];
-    const x=pad+col*(cw+gap);
-    const y=84+pad+row*(ch+gap);
-    drawCard(ctx,p.img, x,y, cw,cardH);
-    drawSunBurst(ctx,x+58,y+68, 56,40,14, p.oferta||'');
-    drawPricePill(ctx,x,y+cardH+6, cw,50, p.preco);
-    drawTagPill(ctx,x+4,y+cardH+62, cw-8,38, p.desc);
-    drawCodPill(ctx,x+4,y+cardH+106, cw-8,38, p.codigo);
+    const x=pad+col*(cw+gap), y=148+pad+row*(cellH+gap);
+    drawStarburst(ctx,x+cw/2,y+46,54,38,14,p.desc);
+    drawCard(ctx,prodImg,x,y+76,cw,cardH);
+    const py=y+76+cardH+10;
+    drawPricePill(ctx,x,py,cw,58,p.preco);
+    drawCodePill(ctx,x+2,py+58+8,cw-4,44,p.codigo);
   }
-  drawFooterWave(ctx,w,h);
+  drawFooter(ctx,w,h);
 }
 
-// ══════════════════════════════════════════════
-//  LAYOUT 5 – Em Estoque  800×1000
-// ══════════════════════════════════════════════
+// Layout 5 — Em Estoque 1080×1920
 function renderLayout5(ctx,w,h){
-  bgWhite(ctx,w,h);
-  drawDots(ctx,w-120,100,100,580);
-  drawDots(ctx,0,100,100,580);
-  drawHeaderNew(ctx,w);
-
+  bgWhite(ctx,w,h); drawHeader(ctx,w);
   const p=productData[0];
-  drawCard(ctx,p.img, 82,110, 636,490);
-  // EM ESTOQUE badge (no sunburst)
-  drawEmEstoque(ctx,w/2,626);
-  drawTagPill(ctx,128,700, 544,50, p.desc);
-  drawCodPill(ctx,128,758, 544,50, p.codigo);
-  drawFooterWave(ctx,w,h);
+  const prodImg=getProductImg(p.img);
+  const cw=980, ch=880, cardX=(w-cw)/2, cardY=155;
+  drawCard(ctx,prodImg,cardX,cardY,cw,ch);
+  drawEmEstoque(ctx,w/2,cardY+ch+50);
+  const codW=680, codH=76, codX=(w-codW)/2, codY=cardY+ch+50+90+30;
+  drawCodePill(ctx,codX,codY,codW,codH,p.codigo);
+  drawFooter(ctx,w,h);
 }
 
 // ══════════════════════════════════════════════
